@@ -1,10 +1,8 @@
 package main
 
 import (
-	"github.com/minekube/gate-plugin-template/plugins/bossbar"
-	"github.com/minekube/gate-plugin-template/plugins/globalchat"
 	"github.com/minekube/gate-plugin-template/plugins/ping"
-	"github.com/minekube/gate-plugin-template/plugins/tablist"
+	"github.com/minekube/gate-plugin-template/plugins/testplugin"
 	"github.com/minekube/gate-plugin-template/plugins/titlecmd"
 	"go.minekube.com/gate/cmd/gate"
 	"go.minekube.com/gate/pkg/edition/java/proxy"
@@ -19,11 +17,11 @@ func main() {
 		// but you can also import your own plugins from other repositories.
 		//
 		// Checkout https://github.com/minekube/awesome for some inspiration.
-		tablist.Plugin,
-		globalchat.Plugin,
-		bossbar.Plugin,
+
+		// globalchat.Plugin,
 		ping.Plugin,
 		titlecmd.Plugin,
+		testplugin.Plugin,
 
 		// Add more plugins as you like.
 		// They will be initialized in the same order as appended.
