@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/dilllxd/dynamicserverapi"
 	"github.com/minekube/gate-plugin-template/plugins/ping"
 	"github.com/minekube/gate-plugin-template/plugins/testplugin"
 	"github.com/minekube/gate-plugin-template/plugins/titlecmd"
@@ -22,6 +23,7 @@ func main() {
 		ping.Plugin,
 		titlecmd.Plugin,
 		testplugin.Plugin,
+		dynamicserverapi.Plugin,
 
 		// Add more plugins as you like.
 		// They will be initialized in the same order as appended.

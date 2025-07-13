@@ -2,13 +2,8 @@
 # See https://gate.minekube.com/guide/config/ for the full configuration options.
 config:
   bind: 0.0.0.0:25565
-  onlineMode: false
+  onlineMode: true
   servers:
-    lobby1: localhost:25566
-    lobby2: localhost:25567
-    private1: localhost:25568
   try:
-    - lobby1
-    - lobby2
   # Disabling it allows our global-chat plugin to cancel messages.
-  forceKeyAuthentication: false
+  forceKeyAuthentication: true

@@ -51,9 +51,9 @@ var Plugin = proxy.Plugin{
 		event.Subscribe(p.Event(), 3, func(e *proxy.ServerPreConnectEvent) {
 			serverPreConnectEvent(PermissionLevel, e)
 		})
-		event.Subscribe(p.Event(), 4, func(e *proxy.PlayerChatEvent) {
-			playerChatEvent(PermissionLevel, p, e)
-		})
+		// event.Subscribe(p.Event(), 4, func(e *proxy.PlayerChatEvent) {
+		//	playerChatEvent(PermissionLevel, p, e)
+		// })
 
 		return nil
 	},
@@ -83,6 +83,10 @@ func playerChooseInitialServerEvent(p *proxy.Proxy, e *proxy.PlayerChooseInitial
 	servers := p.Servers()
 	r := regexp.MustCompile(`^lobby.*\d$`)
 	var lobbys []proxy.RegisteredServer
+	if len(servers) == 0 {
+		e.SetInitialServer(nil)
+		return
+	}
 	for _, server := range servers {
 		if r.MatchString(server.ServerInfo().Name()) {
 			if server.Players().Len() == 0 {
@@ -91,6 +95,10 @@ func playerChooseInitialServerEvent(p *proxy.Proxy, e *proxy.PlayerChooseInitial
 			}
 			lobbys = append(lobbys, server)
 		}
+	}
+	if len(lobbys) == 0 {
+		e.SetInitialServer(nil)
+		return
 	}
 	initialServer := lobbys[0]
 	for _, server := range lobbys {
@@ -157,6 +165,6 @@ func onPostLogin(e *proxy.PostLoginEvent) {
 func playerChatEvent(s Permissionstruct, p *proxy.Proxy, c *proxy.PlayerChatEvent) {
 	message := c.Message()
 	globalBroadcast(p, fmt.Sprintf("[%d]%s: %s", s.PlayerPermissionLevel[c.Player().Username()], c.Player().Username(), message))
-	// c.SetAllowed(false)
-	// c.SetMessage("")
+	c.SetAllowed(false)
+	c.SetMessage("")
 }
