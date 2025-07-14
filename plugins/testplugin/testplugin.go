@@ -7,6 +7,7 @@ import (
 	"github.com/robinbraemer/event"
 	"go.minekube.com/common/minecraft/color"
 	c "go.minekube.com/common/minecraft/component"
+	"net/http"
 	"regexp"
 	"time"
 
@@ -25,12 +26,30 @@ type Permissionstruct struct {
 var Plugin = proxy.Plugin{
 	Name: "TestPlugin",
 	Init: func(ctx context.Context, p *proxy.Proxy) error {
+		Client := http.Client{}
 		PermissionLevel := Permissionstruct{
 			PlayerPermissionLevel: map[string]int{
 				"CaoskingYT32": 1,
 			},
 			ServerPermissionLevel: map[string]int{
 				"private1": 1,
+			},
+		}
+
+		models := models{
+			controller: controllerModel{
+				address: address{
+					ip:   "127.0.0.1",
+					port: 8080,
+				},
+				secret: "secret",
+			},
+			proxy: proxyModel{
+				address: address{
+					ip:   "127.0.0.1",
+					port: 8090,
+				},
+				secret: "secret2",
 			},
 		}
 
@@ -46,7 +65,7 @@ var Plugin = proxy.Plugin{
 			playerChooseInitialServerEvent(p, e)
 		})
 		event.Subscribe(p.Event(), 2, func(e *proxy.PreShutdownEvent) {
-			preShutdownEvent(p, e)
+			preShutdownEvent(p, e, models, Client)
 		})
 		event.Subscribe(p.Event(), 3, func(e *proxy.ServerPreConnectEvent) {
 			serverPreConnectEvent(PermissionLevel, e)
@@ -110,9 +129,9 @@ func playerChooseInitialServerEvent(p *proxy.Proxy, e *proxy.PlayerChooseInitial
 	return
 }
 
-func preShutdownEvent(p *proxy.Proxy, e *proxy.PreShutdownEvent) {
+func preShutdownEvent(p *proxy.Proxy, e *proxy.PreShutdownEvent, controllerData models, Client http.Client) {
 	globalBroadcast(p, "Server is shutting down...\nPrepare to be disconnected after the preparations are complete")
-	shutdownTODOs()
+	shutdownTODOs(controllerData, Client)
 	i := 5
 	globalBroadcast(p, fmt.Sprintf("Shutdownpreparations done.\nThe server is shutting down in %d seconds.\nGoodbye!", i))
 	for i > 0 {
@@ -122,7 +141,8 @@ func preShutdownEvent(p *proxy.Proxy, e *proxy.PreShutdownEvent) {
 	}
 }
 
-func shutdownTODOs() {
+func shutdownTODOs(controllerData models, client http.Client) {
+	unregisterProxy(controllerData, client)
 }
 
 func globalBroadcast(p *proxy.Proxy, message string) error {
@@ -167,4 +187,10 @@ func playerChatEvent(s Permissionstruct, p *proxy.Proxy, c *proxy.PlayerChatEven
 	globalBroadcast(p, fmt.Sprintf("[%d]%s: %s", s.PlayerPermissionLevel[c.Player().Username()], c.Player().Username(), message))
 	c.SetAllowed(false)
 	c.SetMessage("")
+}
+
+func registerProxy(models2 models, client http.Client) {
+}
+
+func unregisterProxy(models2 models, client http.Client) {
 }
