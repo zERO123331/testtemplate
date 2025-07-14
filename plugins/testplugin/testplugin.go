@@ -39,7 +39,7 @@ var Plugin = proxy.Plugin{
 			},
 		}
 
-		models := models{
+		models := &models{
 			controller: controllerModel{
 				address: address{
 					ip:   "127.0.0.1",
@@ -70,7 +70,7 @@ var Plugin = proxy.Plugin{
 			playerChooseInitialServerEvent(p, e)
 		})
 		event.Subscribe(p.Event(), 2, func(e *proxy.PreShutdownEvent) {
-			preShutdownEvent(p, e, models, Client)
+			preShutdownEvent(p, e, *models, Client)
 		})
 		event.Subscribe(p.Event(), 3, func(e *proxy.ServerPreConnectEvent) {
 			serverPreConnectEvent(PermissionLevel, e)
@@ -86,18 +86,30 @@ var Plugin = proxy.Plugin{
 func serverPostConnectEvent(p Permissionstruct, e *proxy.ServerPostConnectEvent) {
 	player := e.Player()
 	welcomeText := Text(fmt.Sprintf("Hello &6&l%s&r!", player.Username()))
-	time := time.Now()
-	timeLayout := time.Format("Monday, 02 January 06 15:04:05 MST")
+	currentTime := time.Now()
+	timeLayout := currentTime.Format("Monday, 02 January 06 15:04:05 MST")
 	subTitle := Text(fmt.Sprintf("&k1&r You are logging in on %s &k1&r", timeLayout))
-	title.ShowTitle(player, &title.Options{
+	err := title.ShowTitle(player, &title.Options{
 		Title:    welcomeText,
 		Subtitle: subTitle,
 	})
+	if err != nil {
+		return
+	}
 	if e.PreviousServer() == nil {
-		player.SendMessage(Text("Welcome to the server!"))
+		err := player.SendMessage(Text("Welcome to the server!"))
+		if err != nil {
+			return
+		}
 		if p.PlayerPermissionLevel[player.Username()] > 0 {
-			player.SendMessage(Text("You are a member of the staff!"))
-			player.SendMessage(Text("There are no server issues at the moment"))
+			err := player.SendMessage(Text("You are a member of the staff!"))
+			if err != nil {
+				return
+			}
+			err = player.SendMessage(Text("There are no server issues at the moment"))
+			if err != nil {
+				return
+			}
 		}
 	}
 
@@ -135,19 +147,28 @@ func playerChooseInitialServerEvent(p *proxy.Proxy, e *proxy.PlayerChooseInitial
 }
 
 func preShutdownEvent(p *proxy.Proxy, e *proxy.PreShutdownEvent, controllerData models, Client http.Client) {
-	globalBroadcast(p, "Server is shutting down...\nPrepare to be disconnected after the preparations are complete")
-	shutdownTODOs(controllerData, Client)
+	err := globalBroadcast(p, "Server is shutting down...\nPrepare to be disconnected after the preparations are complete")
+	if err != nil {
+		return
+	}
+	shutdownTODOs(p, controllerData, Client)
 	i := 5
-	globalBroadcast(p, fmt.Sprintf("Shutdownpreparations done.\nThe server is shutting down in %d seconds.\nGoodbye!", i))
+	err = globalBroadcast(p, fmt.Sprintf("Shutdownpreparations done.\nThe server is shutting down in %d seconds.\nGoodbye!", i))
+	if err != nil {
+		return
+	}
 	for i > 0 {
-		globalBroadcast(p, fmt.Sprintf("Server shutdown in %d seconds...", i))
+		err := globalBroadcast(p, fmt.Sprintf("Server shutdown in %d seconds...", i))
+		if err != nil {
+			return
+		}
 		i--
 		time.Sleep(time.Second)
 	}
 }
 
-func shutdownTODOs(controllerData models, client http.Client) {
-	unregisterProxy(controllerData, client)
+func shutdownTODOs(p *proxy.Proxy, controllerData models, client http.Client) {
+	unregisterProxy(p, controllerData, client)
 }
 
 func globalBroadcast(p *proxy.Proxy, message string) error {
@@ -163,7 +184,10 @@ func globalBroadcast(p *proxy.Proxy, message string) error {
 func serverPreConnectEvent(p Permissionstruct, e *proxy.ServerPreConnectEvent) {
 	if p.PlayerPermissionLevel[e.Player().Username()] < p.ServerPermissionLevel[e.Server().ServerInfo().Name()] {
 		e.Deny()
-		e.Player().SendMessage(Text("You do not have permission to connect to this server!"))
+		err := e.Player().SendMessage(Text("You do not have permission to connect to this server!"))
+		if err != nil {
+			return
+		}
 	}
 }
 
@@ -189,12 +213,15 @@ func onPostLogin(e *proxy.PostLoginEvent) {
 
 func playerChatEvent(s Permissionstruct, p *proxy.Proxy, c *proxy.PlayerChatEvent) {
 	message := c.Message()
-	globalBroadcast(p, fmt.Sprintf("[%d]%s: %s", s.PlayerPermissionLevel[c.Player().Username()], c.Player().Username(), message))
+	err := globalBroadcast(p, fmt.Sprintf("[%d]%s: %s", s.PlayerPermissionLevel[c.Player().Username()], c.Player().Username(), message))
+	if err != nil {
+		return
+	}
 	c.SetAllowed(false)
 	c.SetMessage("")
 }
 
-func registerProxy(models2 models, client http.Client) {
+func registerProxy(models2 *models, client http.Client) {
 	url := fmt.Sprintf("http://%s:%d/listproxies", models2.controller.address.ip, models2.controller.address.port)
 	getProxies, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -217,22 +244,22 @@ func registerProxy(models2 models, client http.Client) {
 		panic(err)
 	}
 	var sameKindProxies []proxyModel
-	for _, proxy := range proxies {
-		if proxy.Kind == models2.proxy.kind {
+	for _, allKindProxy := range proxies {
+		if allKindProxy.Kind == models2.proxy.kind {
 			sameKindProxies = append(sameKindProxies, proxyModel{
-				name:    proxy.Name,
-				address: proxy.Address,
-				kind:    proxy.Kind,
+				name:    allKindProxy.Name,
+				address: allKindProxy.Address,
+				kind:    allKindProxy.Kind,
 			})
 		}
 	}
 	id := 1
 	reg := regexp.MustCompile(fmt.Sprintf(`^%s([0-9]+)`, models2.proxy.kind))
 	if len(sameKindProxies) != 0 {
-		for _, proxy := range sameKindProxies {
-			submatch := reg.FindStringSubmatch(proxy.name)
+		for _, sameKindProxy := range sameKindProxies {
+			submatch := reg.FindStringSubmatch(sameKindProxy.name)
 			if len(submatch) != 2 {
-				panic(fmt.Sprintf("Proxy name %s is not a valid proxy name", proxy.name))
+				panic(fmt.Sprintf("Proxy name %s is not a valid sameKindProxy name", sameKindProxy.name))
 			}
 
 			proxyID, err := strconv.Atoi(submatch[1])
@@ -274,10 +301,35 @@ func registerProxy(models2 models, client http.Client) {
 		panic(err)
 	}
 	if response.StatusCode != 200 {
-		panic(fmt.Sprintf("Failed to register proxy: %s", response.Status))
+		panic(fmt.Sprintf("Failed to register allKindProxy: %s", response.Status))
 	}
 
 }
 
-func unregisterProxy(models2 models, client http.Client) {
+func unregisterProxy(p *proxy.Proxy, models2 models, client http.Client) {
+	url := fmt.Sprintf("http://%s:%d/removeproxy", models2.controller.address.ip, models2.controller.address.port)
+	var proxyData struct {
+		Name string `json:"name"`
+	}
+	proxyData.Name = models2.proxy.name
+
+	proxyJSON, err := json.Marshal(proxyData)
+	if err != nil {
+		panic(err)
+	}
+	body := bytes.NewBuffer(proxyJSON)
+	unregisterProxyRequest, err := http.NewRequest("POST", url, body)
+
+	if err != nil {
+		panic(err)
+	}
+	unregisterProxyRequest.Header.Set("Authorization", models2.controller.secret)
+	response, err := client.Do(unregisterProxyRequest)
+	if err != nil {
+		if response != nil && response.StatusCode != 200 {
+			panic(fmt.Sprintf("Failed to unregister Proxy: %s", response.Status))
+		}
+		panic(err)
+	}
+
 }
