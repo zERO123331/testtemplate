@@ -1,7 +1,9 @@
 package testplugin
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/go-logr/logr"
 	"github.com/robinbraemer/event"
@@ -9,6 +11,7 @@ import (
 	c "go.minekube.com/common/minecraft/component"
 	"net/http"
 	"regexp"
+	"strconv"
 	"time"
 
 	// "go.minekube.com/common/minecraft/color"
@@ -49,6 +52,7 @@ var Plugin = proxy.Plugin{
 					ip:   "127.0.0.1",
 					port: 8090,
 				},
+				kind:   "default",
 				secret: "secret2",
 			},
 		}
@@ -56,6 +60,7 @@ var Plugin = proxy.Plugin{
 		log := logr.FromContextOrDiscard(ctx)
 		log.Info("Hello from TestPlugin plugin!")
 
+		registerProxy(models, Client)
 		// Use ServerPostConnectEvent instead of onPostLogin for titles as they wont be displayed otherwise
 		event.Subscribe(p.Event(), 0, onPostLogin)
 		event.Subscribe(p.Event(), 0, func(e *proxy.ServerPostConnectEvent) {
@@ -190,6 +195,88 @@ func playerChatEvent(s Permissionstruct, p *proxy.Proxy, c *proxy.PlayerChatEven
 }
 
 func registerProxy(models2 models, client http.Client) {
+	url := fmt.Sprintf("http://%s:%d/listproxies", models2.controller.address.ip, models2.controller.address.port)
+	getProxies, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		panic(err)
+	}
+	getProxies.Header.Set("Authorization", models2.controller.secret)
+	response, err := client.Do(getProxies)
+	if err != nil {
+		panic(err)
+	}
+	var proxies []struct {
+		Name    string  `json:"name"`
+		Address address `json:"address"`
+		Kind    string  `json:"kind"`
+	}
+
+	responseJSON := json.NewDecoder(response.Body)
+	err = responseJSON.Decode(&proxies)
+	if err != nil {
+		panic(err)
+	}
+	var sameKindProxies []proxyModel
+	for _, proxy := range proxies {
+		if proxy.Kind == models2.proxy.kind {
+			sameKindProxies = append(sameKindProxies, proxyModel{
+				name:    proxy.Name,
+				address: proxy.Address,
+				kind:    proxy.Kind,
+			})
+		}
+	}
+	id := 1
+	reg := regexp.MustCompile(fmt.Sprintf(`^%s([0-9]+)`, models2.proxy.kind))
+	if len(sameKindProxies) != 0 {
+		for _, proxy := range sameKindProxies {
+			submatch := reg.FindStringSubmatch(proxy.name)
+			if len(submatch) != 2 {
+				panic(fmt.Sprintf("Proxy name %s is not a valid proxy name", proxy.name))
+			}
+
+			proxyID, err := strconv.Atoi(submatch[1])
+			if err != nil {
+				panic(err)
+			}
+			if proxyID == id {
+				id++
+				continue
+			}
+		}
+	}
+	models2.proxy.name = fmt.Sprintf("%s%d", models2.proxy.kind, id)
+	proxyData := struct {
+		Name    string `json:"name"`
+		Address string `json:"address"`
+		Kind    string `json:"kind"`
+		Secret  string `json:"secret"`
+	}{
+		Name:    models2.proxy.name,
+		Address: models2.proxy.address.String(),
+		Kind:    models2.proxy.kind,
+		Secret:  models2.proxy.secret,
+	}
+
+	proxyJSON, err := json.Marshal(proxyData)
+	if err != nil {
+		panic(err)
+	}
+	url = fmt.Sprintf("http://%s:%d/addproxy", models2.controller.address.ip, models2.controller.address.port)
+	registerProxyRequest, err := http.NewRequest("POST", url, bytes.NewBuffer(proxyJSON))
+	if err != nil {
+		panic(err)
+	}
+	registerProxyRequest.Header.Set("Authorization", models2.controller.secret)
+	registerProxyRequest.Header.Set("Content-Type", "application/json")
+	response, err = client.Do(registerProxyRequest)
+	if err != nil {
+		panic(err)
+	}
+	if response.StatusCode != 200 {
+		panic(fmt.Sprintf("Failed to register proxy: %s", response.Status))
+	}
+
 }
 
 func unregisterProxy(models2 models, client http.Client) {
